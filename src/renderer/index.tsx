@@ -1,10 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { HashRouter } from "react-router-dom";
 import "./index.css";
 import App from "./app";
-import { ThemeProvider } from "./components/theme-provider";
-import { HashRouter } from "react-router-dom";
 import ErrorBoundary from "./errorBoundary";
+import { ThemeProvider } from "./components/theme-provider";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <ErrorBoundary>

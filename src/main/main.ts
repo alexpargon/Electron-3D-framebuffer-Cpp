@@ -1,6 +1,5 @@
-import { app, BrowserWindow } from "electron";
 import path from "path";
-import { shell } from "electron";
+import { app, BrowserWindow, shell } from "electron";
 import log from "electron-log/main";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
