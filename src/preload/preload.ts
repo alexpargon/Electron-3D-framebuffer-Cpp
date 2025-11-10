@@ -1,2 +1,13 @@
-// See the Electron documentation for details on how to use preload scripts:
-// https://www.electronjs.org/docs/latest/tutorial/process-model#preload-scripts
+import { readFile } from "fs/promises";
+import { contextBridge } from "electron";
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  readFramebuffer: async (path: string) => {
+    try {
+      const buffer = await readFile(path);
+      return buffer.buffer;
+    } catch {
+      return null;
+    }
+  },
+});

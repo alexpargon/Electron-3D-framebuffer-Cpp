@@ -15,7 +15,10 @@ const createWindow = () => {
     minHeight: 600,
     minWidth: 800,
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.resolve(__dirname, "../../.vite/build/preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
     },
   });
 

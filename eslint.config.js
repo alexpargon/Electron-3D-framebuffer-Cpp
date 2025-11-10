@@ -23,7 +23,7 @@ export default [
 
   // TypeScript files (main/preload - Node.js environment)
   {
-    files: ["src/main/**/*.{ts,tsx}", "src/preload/**/*.{ts,tsx}"],
+    files: ["src/main/**/*.{ts,tsx}"],
     languageOptions: {
       parser: typescriptParser,
       parserOptions: {

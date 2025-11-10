@@ -1,10 +1,12 @@
 import React from "react";
 import Title from "@Renderer/components/title";
+import { CubeView } from "@Renderer/components/cube-view";
 
 function Home() {
   return (
     <div>
-      <Title>New Home</Title>
+      <Title>Home</Title>
+      <CubeView />
       <p>this is the new home</p>
     </div>
   );
