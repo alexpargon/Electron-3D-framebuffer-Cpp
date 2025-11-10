@@ -2,11 +2,14 @@
 #include <GLFW/glfw3.h>
 #include <cmath>
 #include <iostream>
+#include "framebuffer_mmap.h"
 #include <cstring>
 #include <fstream>
 
 const int WIDTH = 512;
 const int HEIGHT = 512;
+const char *SHM_NAME = "/cube_framebuffer";
+const size_t SHM_SIZE = WIDTH * HEIGHT * 4;
 
 void saveFramebufferToFile(const char *filename)
 {
@@ -15,6 +18,14 @@ void saveFramebufferToFile(const char *filename)
   std::ofstream file(filename, std::ios::binary);
   file.write((char *)pixels, WIDTH * HEIGHT * 4);
   file.close();
+  delete[] pixels;
+}
+
+void saveFramebufferToMMap(unsigned char *shm_ptr)
+{
+  unsigned char *pixels = new unsigned char[SHM_SIZE];
+  glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+  std::memcpy(shm_ptr, pixels, SHM_SIZE);
   delete[] pixels;
 }
 
@@ -90,17 +101,30 @@ int main()
   float fW = fH * aspect;
   glFrustum(-fW, fW, -fH, fH, zNear, zFar);
   glMatrixMode(GL_MODELVIEW);
+
+  // Setup shared memory
+  FramebufferMMap fb(SHM_NAME, SHM_SIZE);
+  if (!fb.open())
+  {
+    std::cerr << "Failed to open shared memory" << std::endl;
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return -1;
+  }
+  unsigned char *shm_ptr = static_cast<unsigned char *>(fb.data());
+
   float angle = 0.0f;
   while (!glfwWindowShouldClose(window))
   {
     drawCube(angle);
-    saveFramebufferToFile("/tmp/cube_framebuffer.bin"); // Example: share via file
+    saveFramebufferToMMap(shm_ptr);
     glfwSwapBuffers(window);
     glfwPollEvents();
     angle += 1.0f;
     if (angle > 360.0f)
       angle -= 360.0f;
   }
+  fb.close();
   glfwDestroyWindow(window);
   glfwTerminate();
   return 0;
