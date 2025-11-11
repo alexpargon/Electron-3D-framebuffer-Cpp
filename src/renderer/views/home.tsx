@@ -1,13 +1,12 @@
 import React from "react";
 import Title from "@Renderer/components/title";
-import { CubeView } from "@Renderer/components/cube-view";
+import { CubeViewContainer } from "@Renderer/components/cube-view-container";
 
 function Home() {
   return (
     <div>
-      <Title>Home</Title>
-      <CubeView />
-      <p>this is the new home</p>
+      <Title>Spinning Cube Demo</Title>
+      <CubeViewContainer />
     </div>
   );
 }

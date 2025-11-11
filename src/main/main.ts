@@ -1,19 +1,61 @@
+import * as fs from "fs";
+import * as net from "net";
 import path from "path";
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, shell, ipcMain } from "electron";
 import log from "electron-log/main";
+import { getSocketFileDescriptor } from "./socket-utils";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require("electron-squirrel-startup")) {
   app.quit();
 }
 
+// Setup DMA-BUF Unix Domain Socket Server
+const setupDMABufServer = (mainWindow: BrowserWindow) => {
+  const socketPath = "/tmp/electron_dmabuf.sock";
+
+  // Remove existing socket file if it exists
+  try {
+    fs.unlinkSync(socketPath);
+  } catch (_) {
+    // Ignore error if file doesn't exist
+  }
+
+  const server = net.createServer((connection) => {
+    connection.on("data", (_data) => {
+      // Extract file descriptor using our utility
+      const fd = getSocketFileDescriptor(connection);
+      if (fd !== null) {
+        // Send the DMA-BUF file descriptor to the renderer
+        mainWindow.webContents.send("dmabuf-received", { fd });
+        log.info("Sent DMA-BUF fd to renderer:", fd);
+      }
+    });
+
+    connection.on("error", (err) => {
+      log.error("DMA-BUF socket connection error:", err);
+    });
+  });
+
+  server.on("error", (err) => {
+    log.error("DMA-BUF socket server error:", err);
+  });
+
+  server.listen(socketPath, () => {
+    log.info("DMA-BUF socket server listening on", socketPath);
+    fs.chmodSync(socketPath, "777"); // Ensure the socket is accessible
+  });
+
+  return server;
+};
+
 const createWindow = () => {
   // Create the browser window.
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
-    minHeight: 600,
-    minWidth: 800,
+    width: 1280, // Width to accommodate both 512px views plus padding
+    height: 720, // Height for the views plus header and padding
+    minHeight: 720,
+    minWidth: 1280,
     webPreferences: {
       preload: path.resolve(__dirname, "../../.vite/build/preload.js"),
       contextIsolation: true,
@@ -30,7 +72,16 @@ const createWindow = () => {
   log.transports.file.level = false;
   Object.assign(console, log.functions);
 
-  log.info("haha");
+  // Initialize both file-based and DMA-BUF approaches
+  const server = setupDMABufServer(mainWindow);
+
+  // Register IPC handlers for both approaches
+  ipcMain.handle("get-framebuffer-path", () => "/tmp/cube_framebuffer.bin");
+
+  // Clean up when window is closed
+  mainWindow.on("closed", () => {
+    server.close();
+  });
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url); // Open URL in user's browser.

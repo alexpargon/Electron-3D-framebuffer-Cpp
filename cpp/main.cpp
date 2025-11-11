@@ -62,6 +62,12 @@ void drawCube(float angle)
   glEnd();
 }
 
+#include <sys/mman.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+#include <sys/stat.h>
+
 int main()
 {
   if (!glfwInit())
@@ -90,17 +96,55 @@ int main()
   float fW = fH * aspect;
   glFrustum(-fW, fW, -fH, fH, zNear, zFar);
   glMatrixMode(GL_MODELVIEW);
+
+  // Create shared memory for pixel buffer
+  const char *shm_name = "/cube_pixel_shm";
+  int shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
+  if (shm_fd < 0)
+  {
+    std::cerr << "Failed to open POSIX shared memory object" << std::endl;
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return -1;
+  }
+  size_t pixel_buf_size = WIDTH * HEIGHT * 4;
+  if (ftruncate(shm_fd, pixel_buf_size) < 0)
+  {
+    std::cerr << "Failed to set size of shared memory object" << std::endl;
+    close(shm_fd);
+    shm_unlink(shm_name);
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return -1;
+  }
+  unsigned char *shm_pixels = (unsigned char *)mmap(NULL, pixel_buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+  if (shm_pixels == MAP_FAILED)
+  {
+    std::cerr << "Failed to mmap shared memory" << std::endl;
+    close(shm_fd);
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return -1;
+  }
+
   float angle = 0.0f;
   while (!glfwWindowShouldClose(window))
   {
     drawCube(angle);
-    saveFramebufferToFile("/tmp/cube_framebuffer.bin"); // Example: share via file
+    // Write framebuffer to shared memory for Electron
+    glReadPixels(0, 0, WIDTH, HEIGHT, GL_RGBA, GL_UNSIGNED_BYTE, shm_pixels);
+    // File-based export for comparison
+    saveFramebufferToFile("/tmp/cube_framebuffer.bin");
     glfwSwapBuffers(window);
     glfwPollEvents();
     angle += 1.0f;
     if (angle > 360.0f)
       angle -= 360.0f;
   }
+
+  munmap(shm_pixels, pixel_buf_size);
+  close(shm_fd);
+  shm_unlink(shm_name);
   glfwDestroyWindow(window);
   glfwTerminate();
   return 0;
