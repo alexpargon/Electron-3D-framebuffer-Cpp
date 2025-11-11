@@ -62,11 +62,14 @@ void drawCube(float angle)
   glEnd();
 }
 
+#if defined(_WIN32)
+#include <windows.h>
+#else
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <unistd.h>
-
 #include <sys/stat.h>
+#endif
 
 int main()
 {
@@ -97,7 +100,36 @@ int main()
   glFrustum(-fW, fW, -fH, fH, zNear, zFar);
   glMatrixMode(GL_MODELVIEW);
 
-  // Create shared memory for pixel buffer
+  // Cross-platform shared memory for pixel buffer
+  size_t pixel_buf_size = WIDTH * HEIGHT * 4;
+  unsigned char *shm_pixels = nullptr;
+
+#if defined(_WIN32)
+  HANDLE hMapFile = CreateFileMappingA(
+      INVALID_HANDLE_VALUE,    // Use paging file
+      NULL,                    // Default security
+      PAGE_READWRITE,          // Read/write access
+      0,                       // Maximum object size (high-order DWORD)
+      (DWORD)pixel_buf_size,   // Maximum object size (low-order DWORD)
+      "Global\\cube_pixel_shm" // Name of mapping object
+  );
+  if (hMapFile == NULL)
+  {
+    std::cerr << "Could not create file mapping object (" << GetLastError() << ")\n";
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 1;
+  }
+  shm_pixels = (unsigned char *)MapViewOfFile(hMapFile, FILE_MAP_ALL_ACCESS, 0, 0, pixel_buf_size);
+  if (shm_pixels == NULL)
+  {
+    std::cerr << "Could not map view of file (" << GetLastError() << ")\n";
+    CloseHandle(hMapFile);
+    glfwDestroyWindow(window);
+    glfwTerminate();
+    return 1;
+  }
+#else
   const char *shm_name = "/cube_pixel_shm";
   int shm_fd = shm_open(shm_name, O_CREAT | O_RDWR, 0666);
   if (shm_fd < 0)
@@ -107,7 +139,6 @@ int main()
     glfwTerminate();
     return -1;
   }
-  size_t pixel_buf_size = WIDTH * HEIGHT * 4;
   if (ftruncate(shm_fd, pixel_buf_size) < 0)
   {
     std::cerr << "Failed to set size of shared memory object" << std::endl;
@@ -117,15 +148,17 @@ int main()
     glfwTerminate();
     return -1;
   }
-  unsigned char *shm_pixels = (unsigned char *)mmap(NULL, pixel_buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+  shm_pixels = (unsigned char *)mmap(NULL, pixel_buf_size, PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
   if (shm_pixels == MAP_FAILED)
   {
     std::cerr << "Failed to mmap shared memory" << std::endl;
     close(shm_fd);
+    shm_unlink(shm_name);
     glfwDestroyWindow(window);
     glfwTerminate();
     return -1;
   }
+#endif
 
   float angle = 0.0f;
   while (!glfwWindowShouldClose(window))
@@ -142,9 +175,15 @@ int main()
       angle -= 360.0f;
   }
 
+  // Cleanup shared memory
+#if defined(_WIN32)
+  UnmapViewOfFile(shm_pixels);
+  CloseHandle(hMapFile);
+#else
   munmap(shm_pixels, pixel_buf_size);
   close(shm_fd);
   shm_unlink(shm_name);
+#endif
   glfwDestroyWindow(window);
   glfwTerminate();
   return 0;
